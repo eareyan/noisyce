@@ -11,16 +11,15 @@ def save_results(results_data):
                                      columns=['num_consumers',
                                               'num_goods',
                                               'type_market',
-                                              'eps',
-                                              'num_samples',
                                               'noise_scale',
+                                              'eps',
                                               'gt_welfare',
                                               'emp_welfare',
                                               'max_regret_low_prices_first',
                                               'max_regret_high_prices_first',
                                               'max_regret_low_prices_second',
                                               'max_regret_high_prices_second'])
-    results_dataframe.to_csv('results.csv', index=False)
+    results_dataframe.to_csv('results_ea.csv', index=False)
 
 
 def check_regrets(left_market, right_market):
@@ -83,9 +82,8 @@ for num_consumers, num_goods, type_market, noise_scale, eps in it.product(config
         results += [(num_consumers,
                      num_goods,
                      type_market.__name__,
-                     eps,
-                     num_samples,
                      noise_scale,
+                     eps,
                      gt_welfare,
                      emp_welfare,
                      max_regret_low_prices_first,

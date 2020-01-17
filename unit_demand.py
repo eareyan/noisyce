@@ -1,5 +1,6 @@
 import pprint
 import math
+import time
 import itertools as it
 import numpy as np
 from scipy import sparse
@@ -22,17 +23,6 @@ def print_graph(G):
     print(f"is it bipartite? = {nx.is_bipartite(G)}")
 
 
-def add_noise(V, exclude_pairs, noise_scale):
-    V = np.copy(V)
-    for consumer, good in it.product(range(np.size(V, 0)), range(np.size(V, 1))):
-        if (consumer, good) in exclude_pairs:
-            V[consumer][good] = 0.0
-        else:
-            # TODO other noise models.
-            V[consumer][good] = V[consumer][good] + np.random.rand() * noise_scale
-    return V
-
-
 def get_maximum_welfare(V, flag_print_matching=False):
     """
     Compute the maximum welfare of a unit demand market.
@@ -43,7 +33,7 @@ def get_maximum_welfare(V, flag_print_matching=False):
     G = bipartite.from_biadjacency_matrix(sparse.coo_matrix(V))
     # print_graph(G)
     matching = nx.max_weight_matching(G)
-    # We standarize indice to 0, 1, ..., num_consumers for consumers, and 0, 1, ..., num_goods for goods.
+    # We standardize indices to 0, 1, ..., num_consumers for consumers, and 0, 1, ..., num_goods for goods.
     re_index_match = {}
     for u, v in matching:
         if u < np.size(V, 0):
@@ -99,11 +89,17 @@ def elicitation_algorithm(V, num_samples, delta, c, excluded_pairs, noise_scale,
     :param flag_print_debug:
     :return:
     """
+    if flag_print_debug:
+        t0 = time.time()
+        print(f'\tComputing Empirical Market ... for market \n {V}')
 
-    samples = [add_noise(V, excluded_pairs, noise_scale) for _ in range(0, num_samples)]
-    # print(f'samples = \n')
-    # pprint.pprint(samples)
-    empirical_market = sum(samples) / num_samples
+    X = np.copy(V)
+    # samples = [add_noise(V, excluded_pairs, noise_scale) for _ in range(0, num_samples)]
+    empirical_market = sum([X + np.random.rand(np.size(V, 0), np.size(V, 1)) * noise_scale for _ in range(0, num_samples)]) / num_samples
+    for i, j in excluded_pairs:
+        empirical_market[i][j] = 0.0
+    if flag_print_debug:
+        print(f'\tDone computing empirical market, took {time.time() - t0} sec')
     epsilon = num_samples_to_epsilon(V, num_samples, delta, c, excluded_pairs)
     # debug prints
     if flag_print_debug:
@@ -165,8 +161,13 @@ def elicitation_with_pruning(V, sampling_schedule, delta_schedule, c, target_eps
     # We keep track of pruning at each step
     total_pruned = []
 
+    if flag_print_debug:
+        print('Set Up Ready')
+
     # Loop through the sampling schedule and sampling deltas.
     for t, (curr_num_samples, cur_delta) in enumerate(zip(sampling_schedule, delta_schedule)):
+        if flag_print_debug:
+            print('Eliciting')
         cur_empirical_market, cur_epsilon = elicitation_algorithm(V=V,
                                                                   num_samples=curr_num_samples,
                                                                   delta=cur_delta,
@@ -174,6 +175,8 @@ def elicitation_with_pruning(V, sampling_schedule, delta_schedule, c, target_eps
                                                                   excluded_pairs=prune_set,
                                                                   noise_scale=noise_scale,
                                                                   flag_print_debug=flag_print_debug)
+        if flag_print_debug:
+            print('Done Eliciting')
         total_num_samples += len(active_set) * curr_num_samples
         # For all active pairs (i, j) update the estimated values with the most recent call to the elicitation algorithm.
         for (i, j) in active_set:
@@ -202,6 +205,7 @@ def elicitation_with_pruning(V, sampling_schedule, delta_schedule, c, target_eps
         for i, j in it.product(range(0, np.size(V, 0)), range(0, np.size(V, 1))):
             if (i, j) not in prune_set:
                 if flag_print_debug:
+                    t0 = time.time()
                     print(f'Try pruning pair: {i},{j}: ', end='')
                 if can_be_pruned(V=cur_empirical_market,
                                  full_empirical_welfare=full_empirical_welfare,
@@ -212,9 +216,9 @@ def elicitation_with_pruning(V, sampling_schedule, delta_schedule, c, target_eps
                     active_set.remove((i, j))
                     cur_total_pruned += 1
                     if flag_print_debug:
-                        print(f'++CAN BE PRUNED')
+                        print(f'++CAN BE PRUNED, took {time.time() - t0}')
                 elif flag_print_debug:
-                    print(f'--CANNOT BE PRUNED')
+                    print(f'--CANNOT BE PRUNED, took {time.time() - t0}')
         total_pruned += [cur_total_pruned]
         # Sanity check: the sum of the number of pruned indices and active indices must equal the size of the market.
         assert len(prune_set) + len(active_set) == np.size(V, 0) * np.size(V, 1)
