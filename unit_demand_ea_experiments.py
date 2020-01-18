@@ -45,6 +45,10 @@ for num_consumers, num_goods, type_market, noise_factor, eps in it.product(confi
                                                                            config.type_of_markets,
                                                                            config.noise_factor,
                                                                            config.epsilons):
+    # TODO: refactor this: the preferred distinct good distribution does not work in this case
+    if type_market.__name__ == 'preferred_distinct_good_distribution' and num_consumers > num_goods:
+        continue
+
     c = config.values_high - config.values_low + noise_factor
     num_samples = epsilon_to_num_samples(num_consumers, num_goods, eps, config.delta, c, set())
     print('\n', num_consumers, num_goods, type_market.__name__, noise_factor, eps, num_samples)

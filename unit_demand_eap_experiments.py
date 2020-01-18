@@ -26,6 +26,10 @@ for num_consumers, num_goods, type_market, noise_factor, target_eps in it.produc
                                                                                   config.type_of_markets,
                                                                                   config.noise_factor,
                                                                                   config.epsilons):
+    # TODO: refactor this: the preferred distinct good distribution does not work in this case
+    if type_market.__name__ == 'preferred_distinct_good_distribution' and num_consumers > num_goods:
+        continue
+
     # Compute c
     c = config.values_high - config.values_low + noise_factor
     # Compute the number of samples that EA needs to achieve the target epsilon
@@ -53,6 +57,7 @@ for num_consumers, num_goods, type_market, noise_factor, target_eps in it.produc
         print(f'#{trial}', end=' ')
         # Draw a random market
         market = type_market(num_consumers, num_goods, config.values_high, config.values_low)
+
         # Run EAP experiment.
         _, _, final_delta, final_epsilon, total_num_samples, total_pruned = elicitation_with_pruning(V=market,
                                                                                                      sampling_schedule=sampling_schedule,

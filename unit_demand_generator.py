@@ -30,6 +30,7 @@ def preferred_good_distribution(num_consumers, num_goods, values_high, values_lo
 
 
 def preferred_distinct_good_distribution(num_consumers, num_goods, values_high, values_low):
+    assert num_consumers <= num_goods
     return preferred_good_distribution(num_consumers, num_goods, values_high, values_low, True)
 
 
