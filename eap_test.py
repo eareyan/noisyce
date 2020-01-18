@@ -6,12 +6,12 @@ import time
 
 t0 = time.time()
 # Parameters
-num_consumers = 20
-num_goods = 20
+num_consumers = 5
+num_goods = 5
 noise_factor = 1.0
-# type_market = uniform_random_distribution
-type_market = preferred_subset_distribution
-target_eps = 0.1
+type_market = uniform_random_distribution
+# type_market = preferred_subset_distribution
+target_eps = 0.05
 
 # Derived Parameters
 c = config.values_high - config.values_low + noise_factor
@@ -36,6 +36,6 @@ print(f'delta_schedule = {delta_schedule}')
 # Print results
 num_samples_ea_cf = epsilon_to_num_samples(num_consumers, num_goods, final_epsilon, config.delta, c, set()) * num_consumers * num_goods
 print(f'num_samples_ea_cf = {num_samples_ea_cf}, eap_samples = {total_num_samples}')
-print(f'savings = {(1.0 - (total_num_samples / num_samples_ea_cf)) * 100.0}%')
+print(f'savings = {(1.0 - (total_num_samples / num_samples_ea_cf)) * 100.0:.2f}%')
 print(f'total_pruned = {total_pruned}')
 print(f'took {time.time() - t0:.2f} sec')

@@ -54,6 +54,28 @@ def epsilon_to_num_samples(num_consumers, num_goods, epsilon, delta, c, excluded
     return math.ceil(math.log((2.0 * num_consumers * num_goods - len(excluded_pairs)) / delta) * 0.5 * (c / epsilon) * (c / epsilon))
 
 
+def compute_empirical_market(V, num_samples, noise_factor, excluded_pairs):
+    """
+    Computes an empirical market for the given true market V by adding noise.
+    :param V:
+    :param num_samples:
+    :param noise_factor:
+    :param excluded_pairs:
+    :return:
+    """
+    empirical_market = np.zeros((np.size(V, 0), np.size(V, 1)))
+    pairs_needed = np.size(V, 0) * np.size(V, 1) - len(excluded_pairs)
+    # We save a lot of time by sampling just for the needed pairs.
+    sample_noise = sum(np.random.rand(num_samples, pairs_needed) * noise_factor - (noise_factor / 2.0)) / num_samples
+    k = 0
+    for i in range(np.size(V, 0)):
+        for j in range(np.size(V, 1)):
+            if (i, j) not in excluded_pairs:
+                empirical_market[i][j] = V[i][j] + sample_noise[k]
+                k += 1
+    return empirical_market
+
+
 def elicitation_algorithm(V,
                           num_samples,
                           delta,
@@ -76,14 +98,13 @@ def elicitation_algorithm(V,
     """
     # Make sure the noise factor is positive
     assert noise_factor >= 0.0
+
     if flag_print_debug:
         t0 = time.time()
-        print(f'\tComputing Empirical Market ... for market \n {V}')
-    # Compute the empirical market by adding noise to the market and taking the average
-    empirical_market = sum([V + ((np.random.rand(np.size(V, 0), np.size(V, 1)) * noise_factor) - (noise_factor / 2.0))
-                            for _ in range(0, num_samples)]) / num_samples
-    for i, j in excluded_pairs:
-        empirical_market[i][j] = 0.0
+        # print(f'\tComputing Empirical Market ... for market \n {V}')
+        print(f'\tComputing Empirical Market ... for market, excluded pairs = {len(excluded_pairs)}')
+    empirical_market = compute_empirical_market(V, num_samples, noise_factor, excluded_pairs)
+
     if flag_print_debug:
         print(f'\tDone computing empirical market, took {time.time() - t0} sec')
     c = values_high - values_low + noise_factor
