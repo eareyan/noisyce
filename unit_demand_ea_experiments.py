@@ -11,7 +11,7 @@ def save_results(results_data):
                                      columns=['num_consumers',
                                               'num_goods',
                                               'type_market',
-                                              'noise_scale',
+                                              'noise_factor',
                                               'eps',
                                               'gt_welfare',
                                               'emp_welfare',
@@ -40,24 +40,28 @@ def check_regrets(left_market, right_market):
 
 total = 0
 results = []
-for num_consumers, num_goods, type_market, noise_scale, eps in it.product(config.num_consumers,
-                                                                          config.num_goods,
-                                                                          config.type_of_markets,
-                                                                          config.noise_scale,
-                                                                          config.epsilons):
-    c = config.scale + noise_scale
+for num_consumers, num_goods, type_market, noise_factor, eps in it.product(config.num_consumers,
+                                                                           config.num_goods,
+                                                                           config.type_of_markets,
+                                                                           config.noise_factor,
+                                                                           config.epsilons):
+    c = config.values_high - config.values_low + noise_factor
     num_samples = epsilon_to_num_samples(num_consumers, num_goods, eps, config.delta, c, set())
-    print('\n', num_consumers, num_goods, type_market.__name__, noise_scale, eps, num_samples)
+    print('\n', num_consumers, num_goods, type_market.__name__, noise_factor, eps, num_samples)
     for trial in range(0, config.num_trials):
         print(f'#{trial}', end=' ')
         # Get a random market
-        market = type_market(num_consumers, num_goods, noise_scale)
+        market = type_market(num_consumers, num_goods, noise_factor)
 
         # Run the Elicitation Algorithm
-        empirical_market, epsilon = elicitation_algorithm(market, num_samples, config.delta, c, set(), noise_scale)
+        empirical_market, epsilon = elicitation_algorithm(V=market,
+                                                          num_samples=num_samples,
+                                                          delta=config.delta,
+                                                          values_high=config.values_high,
+                                                          values_low=config.values_low,
+                                                          noise_factor=noise_factor,
+                                                          excluded_pairs=set())
 
-        # The ground truth market is a shifted Market
-        gt_market = market + (noise_scale / 2.0)  # assumes uniform noise
         """
         print(market)
         print(empirical_market)
@@ -65,10 +69,10 @@ for num_consumers, num_goods, type_market, noise_scale, eps in it.product(config
         """
 
         # Check First containment
-        gt_welfare, max_regret_low_prices_first, max_regret_high_prices_first = check_regrets(gt_market, empirical_market)
+        gt_welfare, max_regret_low_prices_first, max_regret_high_prices_first = check_regrets(market, empirical_market)
 
         # Check First containment
-        emp_welfare, max_regret_low_prices_second, max_regret_high_prices_second = check_regrets(empirical_market, gt_market)
+        emp_welfare, max_regret_low_prices_second, max_regret_high_prices_second = check_regrets(empirical_market, market)
 
         # Print Debug
         """
@@ -82,7 +86,7 @@ for num_consumers, num_goods, type_market, noise_scale, eps in it.product(config
         results += [(num_consumers,
                      num_goods,
                      type_market.__name__,
-                     noise_scale,
+                     noise_factor,
                      eps,
                      gt_welfare,
                      emp_welfare,

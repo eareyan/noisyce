@@ -11,7 +11,7 @@ def save_results(results_data):
     results_dataframe = pd.DataFrame(results_data, columns=['num_consumers',
                                                             'num_goods',
                                                             'type_market',
-                                                            'noise_scale',
+                                                            'noise_factor',
                                                             'target_eps',
                                                             'final_epsilon',
                                                             'total_num_samples']
@@ -21,13 +21,13 @@ def save_results(results_data):
 
 total = 0
 results = []
-for num_consumers, num_goods, type_market, noise_scale, target_eps in it.product(config.num_consumers,
-                                                                                 config.num_goods,
-                                                                                 config.type_of_markets,
-                                                                                 config.noise_scale,
-                                                                                 config.epsilons):
+for num_consumers, num_goods, type_market, noise_factor, target_eps in it.product(config.num_consumers,
+                                                                                  config.num_goods,
+                                                                                  config.type_of_markets,
+                                                                                  config.noise_factor,
+                                                                                  config.epsilons):
     # Compute c
-    c = config.scale + noise_scale
+    c = config.values_high - config.values_low + noise_factor
     # Compute the number of samples that EA needs to achieve the target epsilon
     num_samples_ea = epsilon_to_num_samples(num_consumers, num_goods, target_eps, config.delta, c, set())
     # Set up the doubling schedule
@@ -42,24 +42,25 @@ for num_consumers, num_goods, type_market, noise_scale, target_eps in it.product
           f'type_market = {type_market.__name__}, \n'
           f'target_eps = {target_eps}, \n'
           f'scale = {config.scale}, \n'
-          f'noise_scale = {noise_scale}, \n'
+          f'noise_factor = {noise_factor}, \n'
           f'num_samples_ea = {num_samples_ea* num_consumers * num_goods }, \n'
           f'sampling_schedule = {sampling_schedule}, \n'
           f'delta_schedule = {delta_schedule} \n\n')"""
 
-    print('\n', num_consumers, num_goods, type_market.__name__, noise_scale, target_eps)
+    print('\n', num_consumers, num_goods, type_market.__name__, noise_factor, target_eps)
     t0 = time.time()
     for trial in range(0, config.num_trials):
         print(f'#{trial}', end=' ')
         # Draw a random market
-        market = type_market(num_consumers, num_goods, config.scale)
+        market = type_market(num_consumers, num_goods, config.values_high, config.values_low)
         # Run EAP experiment.
         _, _, final_delta, final_epsilon, total_num_samples, total_pruned = elicitation_with_pruning(V=market,
                                                                                                      sampling_schedule=sampling_schedule,
                                                                                                      delta_schedule=delta_schedule,
-                                                                                                     c=c,
+                                                                                                     values_high=config.values_high,
+                                                                                                     values_low=config.values_low,
+                                                                                                     noise_factor=noise_factor,
                                                                                                      target_epsilon=0.0001,
-                                                                                                     noise_scale=noise_scale,
                                                                                                      flag_print_debug=False)
         # Debug Prints
         """
@@ -74,7 +75,7 @@ for num_consumers, num_goods, type_market, noise_scale, target_eps in it.product
         results += [(num_consumers,
                      num_goods,
                      type_market.__name__,
-                     noise_scale,
+                     noise_factor,
                      target_eps,
                      final_epsilon,
                      total_num_samples)

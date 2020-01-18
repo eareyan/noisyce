@@ -3,51 +3,28 @@ import math
 import time
 import itertools as it
 import numpy as np
-from scipy import sparse
-import networkx as nx
-from networkx.algorithms import bipartite
-
-
-def print_graph(G):
-    """
-    Prints information about the given graph
-    :param G: a nx graph object
-    :return: None
-    """
-    pp = pprint.PrettyPrinter(indent=4)
-    print(f"G = {G}")
-    print("Nodes in G")
-    pp.pprint(list(G.nodes(data=True)))
-    print("Edges in G: ")
-    pp.pprint(list(G.edges(data=True)))
-    print(f"is it bipartite? = {nx.is_bipartite(G)}")
+from scipy.optimize import linear_sum_assignment
 
 
 def get_maximum_welfare(V, flag_print_matching=False):
     """
-    Compute the maximum welfare of a unit demand market.
-    :param V: the unit demand market
+    Given a unit-demand market, compute the maximum weight matching and value.
+    :param V:
     :param flag_print_matching:
-    :return: the maximum welfare
+    :return:
     """
-    G = bipartite.from_biadjacency_matrix(sparse.coo_matrix(V))
-    # print_graph(G)
-    matching = nx.max_weight_matching(G)
-    # We standardize indices to 0, 1, ..., num_consumers for consumers, and 0, 1, ..., num_goods for goods.
-    re_index_match = {}
-    for u, v in matching:
-        if u < np.size(V, 0):
-            re_index_match[u] = v - np.size(V, 0)
-        else:
-            re_index_match[v] = u - np.size(V, 0)
-    matching = re_index_match
-    weight = sum([V[i][j] for i, j in matching.items()])
+    row_ind, col_ind = linear_sum_assignment(V * -1.0)
+    max_welfare = V[row_ind, col_ind].sum()
+    matching = {}
+    for i, j in zip(row_ind, col_ind):
+        matching[i] = j
     if flag_print_matching:
         print(f'\nMaximum Weight Matching:')
         for i, j in matching.items():
             print(f'{i}->{j}: {V[i][j]}')
-        print(f'welfare = {weight} \n')
-    return matching, weight
+        print(f'max_welfare = {max_welfare} \n')
+
+    return matching, max_welfare
 
 
 def num_samples_to_epsilon(V, num_samples, delta, c, excluded_pairs):
@@ -77,29 +54,39 @@ def epsilon_to_num_samples(num_consumers, num_goods, epsilon, delta, c, excluded
     return math.ceil(math.log((2.0 * num_consumers * num_goods - len(excluded_pairs)) / delta) * 0.5 * (c / epsilon) * (c / epsilon))
 
 
-def elicitation_algorithm(V, num_samples, delta, c, excluded_pairs, noise_scale, flag_print_debug=False):
+def elicitation_algorithm(V,
+                          num_samples,
+                          delta,
+                          values_high,
+                          values_low,
+                          noise_factor,
+                          excluded_pairs,
+                          flag_print_debug=False):
     """
     The Elicitation Algorithm
     :param V: the unit demand market's valuation matrix
     :param num_samples: number of samples
     :param delta: failure probability
-    :param c: values range
-    :param noise_scale:
-    :param excluded_pairs: pairs to ommit for sampling
+    :param values_high: the maximum number a value can take
+    :param values_low: the minimum number a value can take
+    :param noise_factor: defines the range of uniform noise (-noise_factor / 2, noise_factor / 2)
+    :param excluded_pairs: pairs to omit for sampling
     :param flag_print_debug:
     :return:
     """
+    # Make sure the noise factor is positive
+    assert noise_factor >= 0.0
     if flag_print_debug:
         t0 = time.time()
         print(f'\tComputing Empirical Market ... for market \n {V}')
-
-    X = np.copy(V)
-    # samples = [add_noise(V, excluded_pairs, noise_scale) for _ in range(0, num_samples)]
-    empirical_market = sum([X + np.random.rand(np.size(V, 0), np.size(V, 1)) * noise_scale for _ in range(0, num_samples)]) / num_samples
+    # Compute the empirical market by adding noise to the market and taking the average
+    empirical_market = sum([V + ((np.random.rand(np.size(V, 0), np.size(V, 1)) * noise_factor) - (noise_factor / 2.0))
+                            for _ in range(0, num_samples)]) / num_samples
     for i, j in excluded_pairs:
         empirical_market[i][j] = 0.0
     if flag_print_debug:
         print(f'\tDone computing empirical market, took {time.time() - t0} sec')
+    c = values_high - values_low + noise_factor
     epsilon = num_samples_to_epsilon(V, num_samples, delta, c, excluded_pairs)
     # debug prints
     if flag_print_debug:
@@ -132,13 +119,22 @@ def can_be_pruned(V, full_empirical_welfare, consumer, good, epsilon):
     return candidate_welfare < full_empirical_welfare
 
 
-def elicitation_with_pruning(V, sampling_schedule, delta_schedule, c, target_epsilon, noise_scale, flag_print_debug=True):
+def elicitation_with_pruning(V,
+                             sampling_schedule,
+                             delta_schedule,
+                             values_high,
+                             values_low,
+                             noise_factor,
+                             target_epsilon,
+                             flag_print_debug=True):
     """
     Elicitation Algorithm with pruning.
     :param V:
     :param sampling_schedule:
     :param delta_schedule:
-    :param c:
+    :param values_high:
+    :param values_low:
+    :param noise_factor:
     :param target_epsilon:
     :param flag_print_debug:
     :return:
@@ -153,7 +149,7 @@ def elicitation_with_pruning(V, sampling_schedule, delta_schedule, c, target_eps
 
     # We keep track of the estimated values and their corresponding epsilons.
     estimated_values = {i: {j: 0 for j in range(0, np.size(V, 1))} for i in range(0, np.size(V, 0))}
-    estimated_epsilons = {i: {j: c for j in range(0, np.size(V, 1))} for i in range(0, np.size(V, 0))}
+    estimated_epsilons = {i: {j: math.inf for j in range(0, np.size(V, 1))} for i in range(0, np.size(V, 0))}
 
     # We keep track of the total number of samples used
     total_num_samples = 0
@@ -171,9 +167,10 @@ def elicitation_with_pruning(V, sampling_schedule, delta_schedule, c, target_eps
         cur_empirical_market, cur_epsilon = elicitation_algorithm(V=V,
                                                                   num_samples=curr_num_samples,
                                                                   delta=cur_delta,
-                                                                  c=c,
+                                                                  values_high=values_high,
+                                                                  values_low=values_low,
+                                                                  noise_factor=noise_factor,
                                                                   excluded_pairs=prune_set,
-                                                                  noise_scale=noise_scale,
                                                                   flag_print_debug=flag_print_debug)
         if flag_print_debug:
             print('Done Eliciting')
@@ -184,7 +181,7 @@ def elicitation_with_pruning(V, sampling_schedule, delta_schedule, c, target_eps
             estimated_epsilons[i][j] = cur_epsilon
 
         # Debug prints.
-        if flag_print_debug:
+        if flag_print_debug or True:
             print(f'\n ****** iteration {t} ****** ')
             # print('Estimated Values:')
             # pprint.pprint(estimated_values)
@@ -206,7 +203,7 @@ def elicitation_with_pruning(V, sampling_schedule, delta_schedule, c, target_eps
             if (i, j) not in prune_set:
                 if flag_print_debug:
                     t0 = time.time()
-                    print(f'Try pruning pair: {i},{j}: ', end='')
+                    print(f'Try pruning pair: {i},{j}: ', end='\n')
                 if can_be_pruned(V=cur_empirical_market,
                                  full_empirical_welfare=full_empirical_welfare,
                                  consumer=i,
