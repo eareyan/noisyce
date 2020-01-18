@@ -51,7 +51,7 @@ for num_consumers, num_goods, type_market, noise_factor, eps in it.product(confi
     for trial in range(0, config.num_trials):
         print(f'#{trial}', end=' ')
         # Get a random market
-        market = type_market(num_consumers, num_goods, noise_factor)
+        market = type_market(num_consumers, num_goods, config.values_high, config.values_low)
 
         # Run the Elicitation Algorithm
         empirical_market, epsilon = elicitation_algorithm(V=market,

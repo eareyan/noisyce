@@ -181,7 +181,7 @@ def elicitation_with_pruning(V,
             estimated_epsilons[i][j] = cur_epsilon
 
         # Debug prints.
-        if flag_print_debug or True:
+        if flag_print_debug:
             print(f'\n ****** iteration {t} ****** ')
             # print('Estimated Values:')
             # pprint.pprint(estimated_values)
